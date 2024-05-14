@@ -11,8 +11,8 @@
 #define V_REG					3.3f
 #define ADC_VOLTS( adc_val )	( ( float )adc_val / 4095.0f * V_REG )
 
-#define SINCOS_MIN_AMPLITUDE        0.7         // sqrt(sin^2 + cos^2) has to be larger than this
-#define SINCOS_MAX_AMPLITUDE        1.3         // sqrt(sin^2 + cos^2) has to be smaller than this
+#define SINCOS_MIN_AMPLITUDE        0.7f         // sqrt(sin^2 + cos^2) has to be larger than this
+#define SINCOS_MAX_AMPLITUDE        1.3f         // sqrt(sin^2 + cos^2) has to be smaller than this
 
 #define UPPER_BOUND_V			5.0f
 
@@ -38,10 +38,20 @@ sincos filter constant 0.5
  */
 
 
-#define ENCODER_SIN_AMP			0.558f
-#define ENCODER_COS_AMP			0.556f
-#define ENCODER_SIN_OFFSET		1.473f
-#define ENCODER_COS_OFFSET		1.484f
+#define MOTOR2
+
+#ifdef MOTOR1
+	#define ENCODER_SIN_AMP			0.558f
+	#define ENCODER_COS_AMP			0.556f
+	#define ENCODER_SIN_OFFSET		1.473f
+	#define ENCODER_COS_OFFSET		1.484f
+#elif defined MOTOR2
+	#define ENCODER_SIN_AMP			0.571f
+	#define ENCODER_COS_AMP			0.504f
+	#define ENCODER_SIN_OFFSET		1.305f
+	#define ENCODER_COS_OFFSET		1.361f
+#endif
+
 #define ENCODER_SINCOS_FILTER	0.2f // was 0.5f
 #define ENCODER_SINCOS_PHASE	0.0f
 

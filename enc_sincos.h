@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "adc.h"
+#include "stm32g474xx.h"
 
 typedef struct{
 	uint32_t 	signal_below_min_error_cnt;
@@ -33,6 +33,8 @@ typedef struct{
 	float 			c_gain;
 	float 			s_offset;
 	float 			c_offset;
+    float           s_amp;
+    float           c_amp;
 	float 			filter_constant;
 	float 			phase_corrrection;
 	float 			sph; // sin of the phase_correction angle
@@ -52,5 +54,6 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 void enc_sincos_read_values( EncSinCosConfigT* pcfg );
 float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg );
 int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg );
+int16_t enc_sincos_get_el_angle_s16( EncSinCosConfigT* pcfg );
 
 #endif /* APPLICATION_USER_ENC_SINCOS_H_ */

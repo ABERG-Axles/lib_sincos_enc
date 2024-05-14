@@ -21,7 +21,7 @@ float utils_fast_atan2(float y, float x) {
 	} else {
 		float r = (x + abs_y) / (abs_y - x);
 		float rsq = r * r;
-		angle = (float)( ((0.1963f * rsq) - 0.9817f) * r + (3.0f * M_PI / 4.0f) );
+		angle = (float)( ((0.1963 * rsq) - 0.9817) * r + (3.0 * M_PI / 4.0) );
 	}
 
 	UTILS_NAN_ZERO(angle);

@@ -10,11 +10,19 @@
 #include "enc_ms_timer.h"
 #include "pmsm_motor_parameters.h"
 
+
 #include <string.h>
 #include <math.h>
+//#include "stm32g4xx_hal_adc.h"
+//#include "stm32g4xx_hal_adc_ex.h"
+#include "stm32g4xx_hal.h"
 
+extern ADC_HandleTypeDef hadc4;
 
 // ---------------------------------------------- members ----------------------------------------------
+#define ENC_CALIBRATE
+#ifdef ENC_CALIBRATE
+#define FILTER_CONST 0.8f
 static float out_sin = 0.0f;
 static float out_cos = 0.0f;
 static float out_mod = 0.0f;
@@ -32,12 +40,14 @@ static float c_max = 0.0f;
 static float c_min = UPPER_BOUND_V;
 static float raw_sin = 0.0f;
 static float raw_cos = 0.0f;
+#endif
 
-volatile uint32_t InjADC_Reading = 0;
-volatile uint32_t InjADC_Reading2 = 0;
-// volatile float last_deg = 0.0f;
+volatile static uint32_t InjADC_Reading = 0;
+volatile static uint32_t InjADC_Reading2 = 0;
+volatile float last_deg = 0.0f;
+volatile uint64_t cnt = 0;
 
-#define FILTER_CONST 0.8f
+
 
 /*
 1s16deg = 2PI / 65536
@@ -48,6 +58,7 @@ https://www.st.com/resource/en/user_manual/um1052-stm32f-pmsm-singledual-foc-sdk
 
 
 // ---------------------------------------------- private ----------------------------------------------
+#ifdef ENC_CALIBRATE
 static void calculate_amp_off(){
 	s_ofs = 0.5f * ( s_max + s_min );
 	c_ofs = 0.5f * ( c_max + c_min );
@@ -56,6 +67,7 @@ static void calculate_amp_off(){
 	s_gain = 1.0f / s_amp;
 	c_gain = 1.0f / c_amp;
 }
+#endif
 
 static inline uint32_t read_inj_channel( ADC_TypeDef* adcx, uint32_t channel ){
 	switch ( channel ){
@@ -77,6 +89,7 @@ static inline uint32_t read_inj_channel( ADC_TypeDef* adcx, uint32_t channel ){
 // ---------------------------------------------- interface ----------------------------------------------
 bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg ){
 	memset( &pcfg->state, 0, sizeof( EncSinCosStateT ) );
+#ifdef ENC_CALIBRATE
 	out_sin = 0.0f;
 	out_cos = 0.0f;
 	out_mod = 0.0f;
@@ -88,19 +101,27 @@ bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg ){
 	s_min = UPPER_BOUND_V;
 	c_max = 0.0f;
 	c_min = UPPER_BOUND_V;
-
-	pcfg->s_gain 				= 1.0f / ENCODER_SIN_AMP;
+    pcfg->adcx1					= ADC2;
+	pcfg->injected_channel_1	= ADC_INJECTED_RANK_2;
+	pcfg->adcx2					= ADC2;
+	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_3;
+#else
+    pcfg->s_gain 				= 1.0f / ENCODER_SIN_AMP;
 	pcfg->s_offset				= ENCODER_SIN_OFFSET;
 	pcfg->c_gain				= 1.0f / ENCODER_COS_AMP;
 	pcfg->c_offset				= ENCODER_COS_OFFSET;
 	pcfg->filter_constant		= ENCODER_SINCOS_FILTER;
+    pcfg->s_amp                 = ENCODER_SIN_AMP;
+    pcfg->c_amp                 = ENCODER_COS_AMP;
 	pcfg->sph 					= sinf( DEG2RAD( ENCODER_SINCOS_PHASE ) );
 	pcfg->cph 					= cosf( DEG2RAD( ENCODER_SINCOS_PHASE ) );
-	pcfg->adcx1					= ADC1;
-	pcfg->injected_channel_1	= ADC_INJECTED_RANK_1;
+	pcfg->adcx1					= ADC2;
+	pcfg->injected_channel_1	= ADC_INJECTED_RANK_2;
 	pcfg->adcx2					= ADC2;
-	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_1;
+	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_3;
 	pcfg->bElToMecRatio 		= POLE_PAIR_NUM;
+#endif
+	
 	return true;
 }
 
@@ -141,10 +162,14 @@ void enc_sincos_read_deg( EncSinCosConfigT* pcfg, uint32_t adc_value_sin, uint32
 		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad ) + 180.0f;
 		pcfg->state.mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
 		pcfg->state.el_angle_s16 = pcfg->state.mech_angle_s16 * ( int16_t )pcfg->bElToMecRatio;
+        last_deg = pcfg->state.mech_angle_deg;
+        cnt ++;
 	}
 }
 
+#ifdef ENC_CALIBRATE
 void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, uint32_t adc_value_cos ){
+    
 	LP_FAST( raw_sin, ADC_VOLTS( adc_value_sin ), FILTER_CONST );
 	LP_FAST( raw_cos, ADC_VOLTS( adc_value_cos ), FILTER_CONST );
 
@@ -174,30 +199,32 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 		calculate_amp_off();
 	}
 }
-
+#endif
 
 void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
-//	enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
-//	InjADC_Reading = ( uint32_t )ADC1->JDR1;
+
 	InjADC_Reading = read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );
-//	InjADC_Reading2 = ( uint32_t )ADC2->JDR1;
 	InjADC_Reading2 = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
-	enc_sincos_read_deg( pcfg, InjADC_Reading, InjADC_Reading2 );
+#ifdef ENC_CALIBRATE
+    enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
+#else
+    enc_sincos_read_deg( pcfg, InjADC_Reading, InjADC_Reading2 );
+#endif
+//	HAL_ADCEx_InjectedStart_IT
 }
 
 
-/*
-  void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
-        if( hadc == &hadc1 ){
-               InjADC_Reading = HAL_ADCEx_InjectedGetValue( &hadc1, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
-        }else{
-               InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc2, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
-        }
+//
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
+    cnt ++;
+   if( hadc == &hadc4 ){
+          InjADC_Reading = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
+          InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
+        //   enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
+   }
+}
 
-
- }
-
- */
+ 
 
 float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg ){
 	return pcfg->state.mech_angle_deg;
@@ -206,3 +233,9 @@ float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg ){
 int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg ){
 	return pcfg->state.mech_angle_s16;
 }
+
+
+int16_t enc_sincos_get_el_angle_s16( EncSinCosConfigT* pcfg ){
+    return pcfg->state.el_angle_s16;
+}
+
