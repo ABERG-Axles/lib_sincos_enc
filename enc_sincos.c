@@ -20,7 +20,7 @@
 extern ADC_HandleTypeDef hadc4;
 
 // ---------------------------------------------- members ----------------------------------------------
-#define ENC_CALIBRATE
+//#define ENC_CALIBRATE
 #ifdef ENC_CALIBRATE
 #define FILTER_CONST 0.8f
 static float out_sin = 0.0f;
@@ -47,7 +47,7 @@ volatile static uint32_t InjADC_Reading2 = 0;
 volatile float last_deg = 0.0f;
 volatile uint64_t cnt = 0;
 
-
+extern EncSinCosConfigT sincos_enc_cfg;
 
 /*
 1s16deg = 2PI / 65536
@@ -219,8 +219,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
     cnt ++;
    if( hadc == &hadc4 ){
           InjADC_Reading = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
-          InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
-        //   enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
+          InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_2 ); // Read The Injected Channel Result
+#ifdef ENC_CALIBRATE
+    enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
+#else
+    enc_sincos_read_deg( &sincos_enc_cfg, InjADC_Reading, InjADC_Reading2 );
+#endif
    }
 }
 
