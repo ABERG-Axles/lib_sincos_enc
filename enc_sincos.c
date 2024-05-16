@@ -42,10 +42,9 @@ static float raw_sin = 0.0f;
 static float raw_cos = 0.0f;
 #endif
 
-volatile static uint32_t InjADC_Reading = 0;
-volatile static uint32_t InjADC_Reading2 = 0;
-volatile float last_deg = 0.0f;
-volatile uint64_t cnt = 0;
+static uint32_t InjADC_Reading = 0;
+static uint32_t InjADC_Reading2 = 0;
+static float last_deg = 0.0f;
 
 extern EncSinCosConfigT sincos_enc_cfg;
 
@@ -115,10 +114,10 @@ bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg ){
     pcfg->c_amp                 = ENCODER_COS_AMP;
 	pcfg->sph 					= sinf( DEG2RAD( ENCODER_SINCOS_PHASE ) );
 	pcfg->cph 					= cosf( DEG2RAD( ENCODER_SINCOS_PHASE ) );
-	pcfg->adcx1					= ADC2;
-	pcfg->injected_channel_1	= ADC_INJECTED_RANK_2;
-	pcfg->adcx2					= ADC2;
-	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_3;
+	pcfg->adcx1					= ADC4;
+	pcfg->injected_channel_1	= ADC_INJECTED_RANK_1;
+	pcfg->adcx2					= ADC4;
+	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_2;
 	pcfg->bElToMecRatio 		= POLE_PAIR_NUM;
 #endif
 	
@@ -163,7 +162,6 @@ void enc_sincos_read_deg( EncSinCosConfigT* pcfg, uint32_t adc_value_sin, uint32
 		pcfg->state.mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
 		pcfg->state.el_angle_s16 = pcfg->state.mech_angle_s16 * ( int16_t )pcfg->bElToMecRatio;
         last_deg = pcfg->state.mech_angle_deg;
-        cnt ++;
 	}
 }
 
@@ -216,15 +214,15 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 
 //
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
-    cnt ++;
    if( hadc == &hadc4 ){
-          InjADC_Reading = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
-          InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_2 ); // Read The Injected Channel Result
-#ifdef ENC_CALIBRATE
-    enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
-#else
-    enc_sincos_read_deg( &sincos_enc_cfg, InjADC_Reading, InjADC_Reading2 );
-#endif
+//          InjADC_Reading = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
+//          InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_2 ); // Read The Injected Channel Result
+//#ifdef ENC_CALIBRATE
+//    enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
+//#else
+//    enc_sincos_read_deg( &sincos_enc_cfg, InjADC_Reading, InjADC_Reading2 );
+//#endif
+       enc_sincos_read_values( &sincos_enc_cfg );
    }
 }
 
