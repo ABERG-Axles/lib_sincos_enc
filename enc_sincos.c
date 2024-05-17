@@ -13,9 +13,9 @@
 
 #include <string.h>
 #include <math.h>
-//#include "stm32g4xx_hal_adc.h"
-//#include "stm32g4xx_hal_adc_ex.h"
+
 #include "stm32g4xx_hal.h"
+#include "parameters_conversion.h"
 
 extern ADC_HandleTypeDef hadc4;
 
@@ -42,14 +42,13 @@ static float raw_sin = 0.0f;
 static float raw_cos = 0.0f;
 #endif
 
-static uint32_t InjADC_Reading = 0;
-static uint32_t InjADC_Reading2 = 0;
 static float last_deg = 0.0f;
 
 extern EncSinCosConfigT sincos_enc_cfg;
 
 /*
 1s16deg = 2PI / 65536
+10.4 Measurement units
 https://www.st.com/resource/en/user_manual/um1052-stm32f-pmsm-singledual-foc-sdk-v43-stmicroelectronics.pdf
 */
 #define RAD2S16T_CONVERSION_FACTOR ( uint16_t )( 65536 / ( 2 * M_PI ) )
@@ -118,7 +117,14 @@ bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg ){
 	pcfg->injected_channel_1	= ADC_INJECTED_RANK_1;
 	pcfg->adcx2					= ADC4;
 	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_2;
-	pcfg->bElToMecRatio 		= POLE_PAIR_NUM;
+	
+	pcfg->_Super.bElToMecRatio             = POLE_PAIR_NUM;
+    pcfg->_Super.hMaxReliableMecSpeedUnit  = (uint16_t)(1.15 * MAX_APPLICATION_SPEED_UNIT);
+    pcfg->_Super.hMinReliableMecSpeedUnit  = (uint16_t)(MIN_APPLICATION_SPEED_UNIT);
+    pcfg->_Super.bMaximumSpeedErrorsNumber = M1_SS_MEAS_ERRORS_BEFORE_FAULTS;
+    pcfg->_Super.hMaxReliableMecAccelUnitP = 65535;
+    pcfg->_Super.hMeasurementFrequency     = TF_REGULATION_RATE_SCALED;
+    pcfg->_Super.DPPConvFactor             = DPP_CONV_FACTOR;
 #endif
 	
 	return true;
@@ -128,7 +134,9 @@ void enc_sincos_shutdown( EncSinCosConfigT* pcfg ){
 	memset( &pcfg->state, 0, sizeof( EncSinCosStateT ) );
 }
 
-void enc_sincos_read_deg( EncSinCosConfigT* pcfg, uint32_t adc_value_sin, uint32_t adc_value_cos ){
+void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
+	uint32_t adc_value_sin = pcfg->state.inj_adc_reading_sin;
+	uint32_t adc_value_cos = pcfg->state.inj_adc_reading_cos;
 	float sin = ( ADC_VOLTS( adc_value_sin ) - pcfg->s_offset ) * pcfg->s_gain;
 	float cos = ( ADC_VOLTS( adc_value_cos ) - pcfg->c_offset ) * pcfg->c_gain;
 	LP_FAST( pcfg->state.sin_filtered, sin, pcfg->filter_constant );
@@ -139,29 +147,35 @@ void enc_sincos_read_deg( EncSinCosConfigT* pcfg, uint32_t adc_value_sin, uint32
 	//phase correction
 	cos = (cos + sin * pcfg->sph) / pcfg->cph;
 	float module = SQ( sin ) + SQ( cos );
-	float time_ellapsed = ms_timer_seconds_elapsed_since( pcfg->state.last_update_time );
+	// float time_ellapsed = ms_timer_seconds_elapsed_since( pcfg->state.last_update_time );
 
-	if( time_ellapsed > 1.0f ){
-		time_ellapsed = 1.f;
-	}
+	// if( time_ellapsed > 1.0f ){
+	// 	time_ellapsed = 1.f;
+	// }
 
-	pcfg->state.last_update_time = ms_timer_get_now();
+	// pcfg->state.last_update_time = ms_timer_get_now();
 
 	// signals vector outside of the valid area. Increase error count and discard measurement
 	if( module > SQ( SINCOS_MAX_AMPLITUDE ) ){
 		++ pcfg->state.signal_above_max_error_cnt;
-		LP_FAST( pcfg->state.signal_above_max_error_rate, 1.0f, time_ellapsed );
+		// LP_FAST( pcfg->state.signal_above_max_error_rate, 1.0f, time_ellapsed );
 	}else if( module < SQ( SINCOS_MIN_AMPLITUDE ) ){
 		++ pcfg->state.signal_below_min_error_cnt;
-		LP_FAST( pcfg->state.signal_low_error_rate, 1.0f, time_ellapsed );
+		// LP_FAST( pcfg->state.signal_low_error_rate, 1.0f, time_ellapsed );
 	}else{
-		LP_FAST( pcfg->state.signal_above_max_error_rate, 0.0f, time_ellapsed );
-		LP_FAST( pcfg->state.signal_low_error_rate, 0.0f, time_ellapsed );
+		// LP_FAST( pcfg->state.signal_above_max_error_rate, 0.0f, time_ellapsed );
+		// LP_FAST( pcfg->state.signal_low_error_rate, 0.0f, time_ellapsed );
 		float ang_rad = utils_fast_atan2( sin, cos );
-		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad ) + 180.0f;
-		pcfg->state.mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
-		pcfg->state.el_angle_s16 = pcfg->state.mech_angle_s16 * ( int16_t )pcfg->bElToMecRatio;
+		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad );
+		int16_t mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
+		int16_t el_angle_s16 = mech_angle_s16 * ( int16_t )pcfg->_Super.bElToMecRatio;
         last_deg = pcfg->state.mech_angle_deg;
+
+		int16_t hMecAnglePrev = pcfg->_Super.hMecAngle;
+		pcfg->_Super.hMecAngle = mech_angle_s16;
+		pcfg->_Super.hElAngle = el_angle_s16;
+		int16_t hMecSpeedDpp = mech_angle_s16 - hMecAnglePrev;
+    	pcfg->_Super.wMecAngle += ((int32_t)hMecSpeedDpp);
 	}
 }
 
@@ -201,14 +215,13 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 
 void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 
-	InjADC_Reading = read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );
-	InjADC_Reading2 = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
+	pcfg->state.inj_adc_reading_sin = read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );
+	pcfg->state.inj_adc_reading_cos = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
 #else
-    enc_sincos_read_deg( pcfg, InjADC_Reading, InjADC_Reading2 );
+    // enc_sincos_calc_deg( pcfg, InjADC_Reading, InjADC_Reading2 );
 #endif
-//	HAL_ADCEx_InjectedStart_IT
 }
 
 
@@ -232,12 +245,12 @@ float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg ){
 	return pcfg->state.mech_angle_deg;
 }
 
-int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg ){
-	return pcfg->state.mech_angle_s16;
-}
+// int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg ){
+// 	return pcfg->state.mech_angle_s16;
+// }
 
 
-int16_t enc_sincos_get_el_angle_s16( EncSinCosConfigT* pcfg ){
-    return pcfg->state.el_angle_s16;
+int16_t SPD_GetElAngle( EncSinCosConfigT* pcfg ){
+    return pcfg->_Super.hElAngle;
 }
 
