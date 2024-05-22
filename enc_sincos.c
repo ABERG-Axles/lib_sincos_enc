@@ -34,8 +34,8 @@ volatile uint32_t ticks = 0;
 volatile uint16_t tim1_ovc = 0;
 volatile uint32_t freq = 0;
 volatile float rpm = 0.0f;
-volatile float rpm_filtered = 0.0f;
-volatile uint32_t f = 0;
+float rpm_filtered = 0.0f;
+
 volatile int16_t spd_s16 = 0;
 // ---------------------------------------------- members ----------------------------------------------
 //#define ENC_CALIBRATE
@@ -61,8 +61,9 @@ static float raw_cos = 0.0f;
 #endif
 
 static float last_deg = 0.0f;
+uint32_t 	g_inj_adc_reading_sin;
+uint32_t 	g_inj_adc_reading_cos;
 
-extern EncSinCosConfigT sincos_enc_cfg;
 
 /*
 1s16deg = 2PI / 65536
@@ -234,7 +235,9 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 
 	pcfg->state.inj_adc_reading_sin = read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );
+    g_inj_adc_reading_sin = pcfg->state.inj_adc_reading_sin;
 	pcfg->state.inj_adc_reading_cos = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
+    g_inj_adc_reading_cos = pcfg->state.inj_adc_reading_cos;
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
 #else
@@ -287,13 +290,13 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
             ticks = (t2 + (tim1_ovc * 65536)) - t1;
 
             if( ticks > 0 ){
-                f = (uint32_t)( REF_CLK / ticks );
+                uint32_t f = (uint32_t)( REF_CLK / ticks );
 
                 if( f >=  MIN_FRQ && f <= MAX_FRQ ) {
                     freq = f;
                     rpm = freq * 60;
 //                    LP_FAST( rpm_filtered, rpm, 0.5f );
-                    LP_FAST( rpm_filtered, rpm, pcfg->filter_constant );
+                    LP_FAST( rpm_filtered, rpm, ENCODER_SINCOS_FILTER );
                 }else{
                     incorrect_fr = f;
                 }
