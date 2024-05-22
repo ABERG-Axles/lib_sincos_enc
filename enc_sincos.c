@@ -118,10 +118,10 @@ bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg ){
 	s_min = UPPER_BOUND_V;
 	c_max = 0.0f;
 	c_min = UPPER_BOUND_V;
-    pcfg->adcx1					= ADC2;
-	pcfg->injected_channel_1	= ADC_INJECTED_RANK_2;
-	pcfg->adcx2					= ADC2;
-	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_3;
+    pcfg->adcx1					= ADC4;
+	pcfg->injected_channel_1	= ADC_INJECTED_RANK_1;
+	pcfg->adcx2					= ADC4;
+	pcfg->injected_channel_2 	= ADC_INJECTED_RANK_2;
 #else
     pcfg->s_gain 				= 1.0f / ENCODER_SIN_AMP;
 	pcfg->s_offset				= ENCODER_SIN_OFFSET;
@@ -216,7 +216,7 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 		c_max = raw_cos;
 	}
 
-	if( raw_cos < c_min ){
+	if( raw_cos > 0 && raw_cos < c_min ){
 		c_min = raw_cos;
 	}
 
@@ -239,7 +239,7 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 	pcfg->state.inj_adc_reading_cos = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
     g_inj_adc_reading_cos = pcfg->state.inj_adc_reading_cos;
 #ifdef ENC_CALIBRATE
-    enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
+    enc_sincos_calibrate( pcfg->state.inj_adc_reading_sin, pcfg->state.inj_adc_reading_cos );
 #else
     enc_sincos_calc_deg( pcfg );
 #endif

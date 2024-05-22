@@ -16,13 +16,13 @@
 
 #define UPPER_BOUND_V			5.0f
 
+#define ENCODER_SIN_OFFSET		1.385f
+#define ENCODER_COS_OFFSET		1.350f
+#define ENCODER_SIN_AMP			0.535f
+#define ENCODER_COS_AMP			0.609f
 
-#define ENCODER_SIN_AMP			0.478f
-#define ENCODER_COS_AMP			0.490f
-#define ENCODER_SIN_OFFSET		1.257f
-#define ENCODER_COS_OFFSET		1.237f
 
-#define ENCODER_SINCOS_FILTER	0.5f // was 0.5f
+#define ENCODER_SINCOS_FILTER	0.2f // was 0.5f
 #define ENCODER_SINCOS_PHASE	0.0f
 
 
