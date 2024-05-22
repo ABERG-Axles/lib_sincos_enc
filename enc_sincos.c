@@ -184,8 +184,8 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 	}else{
 		// LP_FAST( pcfg->state.signal_above_max_error_rate, 0.0f, time_ellapsed );
 		// LP_FAST( pcfg->state.signal_low_error_rate, 0.0f, time_ellapsed );
-		float ang_rad = utils_fast_atan2( sin, cos ) + M_PI;
-		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad );
+		float ang_rad = utils_fast_atan2( sin, cos );
+		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad ) + 180.0f;
 		int16_t mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
 		int16_t el_angle_s16 = mech_angle_s16 * ( int16_t )pcfg->_Super.bElToMecRatio;
         last_deg = pcfg->state.mech_angle_deg;
@@ -263,7 +263,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
  
 
 float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg ){
-	return pcfg->state.mech_angle_deg;
+//	return pcfg->state.mech_angle_deg;
+    return pcfg->state.mech_angle_deg;
 }
 
 // int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg ){
@@ -336,3 +337,12 @@ int16_t enc_sincos_SPD_GetS16Speed( EncSinCosConfigT* pHandle ){
     return (int16_t)wAux;
 }
     
+
+
+int16_t enc_sincos_get_raw_sin( EncSinCosConfigT* pHandle ){
+    return pHandle->state.inj_adc_reading_sin;
+}
+
+int16_t enc_sincos_get_raw_cos( EncSinCosConfigT* pHandle ){
+    return pHandle->state.inj_adc_reading_cos;
+}

@@ -63,4 +63,9 @@ bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSp
 int16_t enc_sincos_SPD_GetElAngle( EncSinCosConfigT* pcfg );
 int16_t enc_sincos_SPD_GetS16Speed( EncSinCosConfigT* pcfg );
 
+
+
+int16_t enc_sincos_get_raw_sin();
+int16_t enc_sincos_get_raw_cos();
+
 #endif /* APPLICATION_USER_ENC_SINCOS_H_ */
