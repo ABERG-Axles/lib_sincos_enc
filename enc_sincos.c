@@ -10,14 +10,33 @@
 #include "enc_ms_timer.h"
 #include "pmsm_motor_parameters.h"
 
-
 #include <string.h>
 #include <math.h>
 
 #include "stm32g4xx_hal.h"
 #include "parameters_conversion.h"
+#include "tim.h"
 
 extern ADC_HandleTypeDef hadc4;
+
+#define IDLE   0
+#define DONE   1
+#define F_CLK  170000000U
+#define PRESCALAR  340U
+#define REF_CLK ( F_CLK / PRESCALAR )
+#define MIN_FRQ ( REF_CLK / 65536U )
+#define MAX_FRQ 100U
+
+volatile uint8_t state = IDLE;
+volatile uint32_t t1 = 0;
+volatile uint32_t t2 = 0;
+volatile uint32_t ticks = 0;
+volatile uint16_t tim1_ovc = 0;
+volatile uint32_t freq = 0;
+volatile float rpm = 0.0f;
+volatile float rpm_filtered = 0.0f;
+volatile uint32_t f = 0;
+#define LP_FAST(value, sample, filter_constant)	(value -= (filter_constant) * ((value) - (sample)))
 
 // ---------------------------------------------- members ----------------------------------------------
 //#define ENC_CALIBRATE
@@ -220,7 +239,7 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
 #else
-    // enc_sincos_calc_deg( pcfg, InjADC_Reading, InjADC_Reading2 );
+    enc_sincos_calc_deg( pcfg, pcfg->state.inj_adc_reading_sin, pcfg->state.inj_adc_reading_cos );
 #endif
 }
 
@@ -250,7 +269,66 @@ float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg ){
 // }
 
 
-int16_t SPD_GetElAngle( EncSinCosConfigT* pcfg ){
+int16_t enc_sincos_SPD_GetElAngle( EncSinCosConfigT* pcfg ){
     return pcfg->_Super.hElAngle;
 }
 
+volatile static float incorrect_fr = 0.0f;
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
+	if( htim == &htim3 ){
+        HAL_GPIO_WritePin( LEG_SIGNAL_COMP_GPIO_Port, LEG_SIGNAL_COMP_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin( LEG_SIGNAL_COMP_GPIO_Port, LEG_SIGNAL_COMP_Pin, GPIO_PIN_RESET);
+
+        if(state == IDLE){
+            t1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            tim1_ovc = 0;
+            state = DONE;
+        }else if(state == DONE){
+            t2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            ticks = (t2 + (tim1_ovc * 65536)) - t1;
+
+            if( ticks > 0 ){
+                f = (uint32_t)( REF_CLK / ticks );
+
+                if( f >=  MIN_FRQ && f <= MAX_FRQ ) {
+                    freq = f;
+                    rpm = freq * 60;
+                    LP_FAST( rpm_filtered, rpm, 0.2f );
+                }else{
+                    incorrect_fr = f;
+                }
+
+            }
+
+            __HAL_TIM_SET_COUNTER(htim, 0);
+            state = IDLE;
+        }
+    }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
+    if( htim == &htim3 ){
+        tim1_ovc ++;
+    }
+}
+
+bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSpeedUnit ){
+    int16_t mechSpd10Hz =  ( (int16_t)rpm_filtered * SPEED_UNIT ) / U_RPM;
+    *pMecSpeedUnit = mechSpd10Hz;
+    
+    /* Stores average mechanical speed */
+    // pHandle->SpeedRefUnitExt = ((int32_t)hTargetFinal) * 65536;
+    pHandle->_Super.hAvrMecSpeedUnit = (int16_t)mechSpd10Hz;
+    int32_t elSpd = ( int32_t )mechSpd10Hz * ( int32_t )pHandle->_Super.bElToMecRatio * 65536;
+    pHandle->_Super.hElSpeedDpp = ( int16_t )elSpd;
+    return SPD_IsMecSpeedReliable( &pHandle->_Super, pMecSpeedUnit );
+}
+
+
+int16_t enc_sincos_SPD_GetS16Speed( EncSinCosConfigT* pHandle ){
+    int32_t wAux = (int32_t)pHandle->_Super.hAvrMecSpeedUnit;
+    wAux *= INT16_MAX;
+    wAux /= (int16_t)pHandle->_Super.hMaxReliableMecSpeedUnit;
+    return (int16_t)wAux;
+}
+    

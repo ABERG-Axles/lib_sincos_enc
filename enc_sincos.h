@@ -59,6 +59,8 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg );
 float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg );
 
 // int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg );
-int16_t SPD_GetElAngle( EncSinCosConfigT* pcfg );
+bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSpeedUnit );
+int16_t enc_sincos_SPD_GetElAngle( EncSinCosConfigT* pcfg );
+int16_t enc_sincos_SPD_GetS16Speed( EncSinCosConfigT* pcfg );
 
 #endif /* APPLICATION_USER_ENC_SINCOS_H_ */
