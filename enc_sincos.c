@@ -36,8 +36,7 @@ volatile uint32_t freq = 0;
 volatile float rpm = 0.0f;
 volatile float rpm_filtered = 0.0f;
 volatile uint32_t f = 0;
-#define LP_FAST(value, sample, filter_constant)	(value -= (filter_constant) * ((value) - (sample)))
-
+volatile int16_t spd_s16 = 0;
 // ---------------------------------------------- members ----------------------------------------------
 //#define ENC_CALIBRATE
 #ifdef ENC_CALIBRATE
@@ -184,7 +183,7 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 	}else{
 		// LP_FAST( pcfg->state.signal_above_max_error_rate, 0.0f, time_ellapsed );
 		// LP_FAST( pcfg->state.signal_low_error_rate, 0.0f, time_ellapsed );
-		float ang_rad = utils_fast_atan2( sin, cos );
+		float ang_rad = utils_fast_atan2( sin, cos ) + M_PI;
 		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad );
 		int16_t mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
 		int16_t el_angle_s16 = mech_angle_s16 * ( int16_t )pcfg->_Super.bElToMecRatio;
@@ -239,7 +238,7 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
 #else
-    enc_sincos_calc_deg( pcfg, pcfg->state.inj_adc_reading_sin, pcfg->state.inj_adc_reading_cos );
+    enc_sincos_calc_deg( pcfg );
 #endif
 }
 
@@ -293,7 +292,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
                 if( f >=  MIN_FRQ && f <= MAX_FRQ ) {
                     freq = f;
                     rpm = freq * 60;
-                    LP_FAST( rpm_filtered, rpm, 0.2f );
+//                    LP_FAST( rpm_filtered, rpm, 0.5f );
+                    LP_FAST( rpm_filtered, rpm, pcfg->filter_constant );
                 }else{
                     incorrect_fr = f;
                 }
@@ -313,12 +313,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 }
 
 bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSpeedUnit ){
-    int16_t mechSpd10Hz =  ( (int16_t)rpm_filtered * SPEED_UNIT ) / U_RPM;
+    int16_t mechSpd10Hz =  ( ( int16_t )rpm * SPEED_UNIT ) / U_RPM;
     *pMecSpeedUnit = mechSpd10Hz;
     
     /* Stores average mechanical speed */
     // pHandle->SpeedRefUnitExt = ((int32_t)hTargetFinal) * 65536;
     pHandle->_Super.hAvrMecSpeedUnit = (int16_t)mechSpd10Hz;
+    spd_s16 = (int16_t)mechSpd10Hz;
     int32_t elSpd = ( int32_t )mechSpd10Hz * ( int32_t )pHandle->_Super.bElToMecRatio * 65536;
     pHandle->_Super.hElSpeedDpp = ( int16_t )elSpd;
     return SPD_IsMecSpeedReliable( &pHandle->_Super, pMecSpeedUnit );
