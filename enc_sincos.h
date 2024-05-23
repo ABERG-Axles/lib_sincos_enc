@@ -17,21 +17,16 @@
 typedef struct{
 	uint32_t 	signal_below_min_error_cnt;
 	uint32_t 	signal_above_max_error_cnt;
-	// float 		signal_low_error_rate;
-	// float 		signal_above_max_error_rate;
 	float 		mech_angle_deg;				//!< mech rotor angle in [deg]
 	
 	float 		sin_filtered;
 	float 		cos_filtered;
-	// uint64_t 	last_update_time;
 	uint32_t 	inj_adc_reading_sin;
  	uint32_t 	inj_adc_reading_cos;
 }EncSinCosStateT;
 
 typedef struct{
 	SpeednPosFdbk_Handle_t _Super;                     /*!< SpeednPosFdbk  handle definition. */
-	// The gain is 1/amplutide. The reason it is stored like that
-	// is to avoid two divisions when reading the encoder.
 	float 			s_gain;
 	float 			c_gain;
 	float 			s_offset;
@@ -47,6 +42,8 @@ typedef struct{
 	ADC_TypeDef* 	adcx2;
 	uint32_t 		injected_channel_2;
 	EncSinCosStateT	state;
+	bool 			TimerOverflowError;                           /*!< true if the number of overflow  occurred is greater than
+                                                          'define' ENC_MAX_OVERFLOW_NB*/
 }EncSinCosConfigT;
 
 bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg );
@@ -62,7 +59,7 @@ float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg );
 bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSpeedUnit );
 int16_t enc_sincos_SPD_GetElAngle( EncSinCosConfigT* pcfg );
 int16_t enc_sincos_SPD_GetS16Speed( EncSinCosConfigT* pcfg );
-
+void enc_sincos_set_mec_angle( EncSinCosConfigT* pHandle, int16_t hMecAngle );
 
 
 int16_t enc_sincos_get_raw_sin();

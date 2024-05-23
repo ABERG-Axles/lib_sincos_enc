@@ -27,13 +27,14 @@ extern ADC_HandleTypeDef hadc4;
 #define MIN_FRQ ( REF_CLK / 65536U )
 #define MAX_FRQ 100U
 
-volatile uint8_t state = IDLE;
-volatile uint32_t t1 = 0;
-volatile uint32_t t2 = 0;
-volatile uint32_t ticks = 0;
-volatile uint16_t tim1_ovc = 0;
-volatile uint32_t freq = 0;
+static  uint8_t state = IDLE;
+static uint32_t t1 = 0;
+static uint32_t t2 = 0;
+static  uint32_t ticks = 0;
+static uint32_t tim4_ovc = 0;
+static  uint32_t freq = 0;
 volatile float rpm = 0.0f;
+volatile float rpm_prev = 0.0f;
 float rpm_filtered = 0.0f;
 
 volatile int16_t spd_s16 = 0;
@@ -60,9 +61,9 @@ static float raw_sin = 0.0f;
 static float raw_cos = 0.0f;
 #endif
 
-static float last_deg = 0.0f;
-uint32_t 	g_inj_adc_reading_sin;
-uint32_t 	g_inj_adc_reading_cos;
+volatile static int last_deg = 0.0f;
+// uint32_t 	g_inj_adc_reading_sin;
+// uint32_t 	g_inj_adc_reading_cos;
 
 
 /*
@@ -166,29 +167,18 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 	//phase correction
 	cos = (cos + sin * pcfg->sph) / pcfg->cph;
 	float module = SQ( sin ) + SQ( cos );
-	// float time_ellapsed = ms_timer_seconds_elapsed_since( pcfg->state.last_update_time );
-
-	// if( time_ellapsed > 1.0f ){
-	// 	time_ellapsed = 1.f;
-	// }
-
-	// pcfg->state.last_update_time = ms_timer_get_now();
 
 	// signals vector outside of the valid area. Increase error count and discard measurement
 	if( module > SQ( SINCOS_MAX_AMPLITUDE ) ){
 		++ pcfg->state.signal_above_max_error_cnt;
-		// LP_FAST( pcfg->state.signal_above_max_error_rate, 1.0f, time_ellapsed );
 	}else if( module < SQ( SINCOS_MIN_AMPLITUDE ) ){
 		++ pcfg->state.signal_below_min_error_cnt;
-		// LP_FAST( pcfg->state.signal_low_error_rate, 1.0f, time_ellapsed );
 	}else{
-		// LP_FAST( pcfg->state.signal_above_max_error_rate, 0.0f, time_ellapsed );
-		// LP_FAST( pcfg->state.signal_low_error_rate, 0.0f, time_ellapsed );
 		float ang_rad = utils_fast_atan2( sin, cos );
-		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad ) + 180.0f;
+		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad );
 		int16_t mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
 		int16_t el_angle_s16 = mech_angle_s16 * ( int16_t )pcfg->_Super.bElToMecRatio;
-        last_deg = pcfg->state.mech_angle_deg;
+        last_deg = ( int )pcfg->state.mech_angle_deg;
 
 		int16_t hMecAnglePrev = pcfg->_Super.hMecAngle;
 		pcfg->_Super.hMecAngle = mech_angle_s16;
@@ -235,9 +225,9 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 
 	pcfg->state.inj_adc_reading_sin = read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );
-    g_inj_adc_reading_sin = pcfg->state.inj_adc_reading_sin;
+    // g_inj_adc_reading_sin = pcfg->state.inj_adc_reading_sin;
 	pcfg->state.inj_adc_reading_cos = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
-    g_inj_adc_reading_cos = pcfg->state.inj_adc_reading_cos;
+    // g_inj_adc_reading_cos = pcfg->state.inj_adc_reading_cos;
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( pcfg->state.inj_adc_reading_sin, pcfg->state.inj_adc_reading_cos );
 #else
@@ -249,13 +239,6 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 //
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
    if( hadc == &hadc4 ){
-//          InjADC_Reading = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_1 ); // Read The Injected Channel Result
-//          InjADC_Reading2 = HAL_ADCEx_InjectedGetValue( &hadc4, ADC_INJECTED_RANK_2 ); // Read The Injected Channel Result
-//#ifdef ENC_CALIBRATE
-//    enc_sincos_calibrate( InjADC_Reading, InjADC_Reading2 );
-//#else
-//    enc_sincos_read_deg( &sincos_enc_cfg, InjADC_Reading, InjADC_Reading2 );
-//#endif
        enc_sincos_read_values( &sincos_enc_cfg );
    }
 }
@@ -267,28 +250,23 @@ float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg ){
     return pcfg->state.mech_angle_deg;
 }
 
-// int16_t enc_sincos_get_angle_s16( EncSinCosConfigT* pcfg ){
-// 	return pcfg->state.mech_angle_s16;
-// }
-
-
 int16_t enc_sincos_SPD_GetElAngle( EncSinCosConfigT* pcfg ){
     return pcfg->_Super.hElAngle;
 }
 
-volatile static float incorrect_fr = 0.0f;
+
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
 	if( htim == &htim3 ){
-        HAL_GPIO_WritePin( LEG_SIGNAL_COMP_GPIO_Port, LEG_SIGNAL_COMP_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin( LEG_SIGNAL_COMP_GPIO_Port, LEG_SIGNAL_COMP_Pin, GPIO_PIN_RESET);
+        // HAL_GPIO_WritePin( LEG_SIGNAL_COMP_GPIO_Port, LEG_SIGNAL_COMP_Pin, GPIO_PIN_SET);
+        // HAL_GPIO_WritePin( LEG_SIGNAL_COMP_GPIO_Port, LEG_SIGNAL_COMP_Pin, GPIO_PIN_RESET);
 
         if(state == IDLE){
-            t1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-            tim1_ovc = 0;
+            t1 = HAL_TIM_ReadCapturedValue( htim, TIM_CHANNEL_1 );
+            tim4_ovc = 0;
             state = DONE;
         }else if(state == DONE){
-            t2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-            ticks = (t2 + (tim1_ovc * 65536)) - t1;
+            t2 = HAL_TIM_ReadCapturedValue( htim, TIM_CHANNEL_1 );
+            ticks = ( t2 + ( tim4_ovc * 65536 ) ) - t1;
 
             if( ticks > 0 ){
                 uint32_t f = (uint32_t)( REF_CLK / ticks );
@@ -296,12 +274,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
                 if( f >=  MIN_FRQ && f <= MAX_FRQ ) {
                     freq = f;
                     rpm = freq * 60;
-//                    LP_FAST( rpm_filtered, rpm, 0.5f );
-                    LP_FAST( rpm_filtered, rpm, ENCODER_SINCOS_FILTER );
-                }else{
-                    incorrect_fr = f;
+                    LP_FAST( rpm_filtered, rpm, 0.8f );
                 }
-
             }
 
             __HAL_TIM_SET_COUNTER(htim, 0);
@@ -309,24 +283,42 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
         }
     }
 }
-
+#define ENC_MAX_OVERFLOW_NB     ((uint16_t)2)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
     if( htim == &htim3 ){
-        tim1_ovc ++;
+        tim4_ovc ++;
     }
 }
 
 bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSpeedUnit ){
+	bool bReliability = true;
     int16_t mechSpd10Hz =  ( ( int16_t )rpm * SPEED_UNIT ) / U_RPM;
     *pMecSpeedUnit = mechSpd10Hz;
+    // TODO: speed is calculated if only COMP calls TIM2 interrupt.
+	// must understand that there is no motion.
+    {
+        /* Stores average mechanical speed */
+        // pHandle->SpeedRefUnitExt = ((int32_t)hTargetFinal) * 65536;
+        pHandle->_Super.hAvrMecSpeedUnit = (int16_t)mechSpd10Hz;
+        rpm_prev = rpm;
+    }
     
-    /* Stores average mechanical speed */
-    // pHandle->SpeedRefUnitExt = ((int32_t)hTargetFinal) * 65536;
-    pHandle->_Super.hAvrMecSpeedUnit = (int16_t)mechSpd10Hz;
     spd_s16 = (int16_t)mechSpd10Hz;
     int32_t elSpd = ( int32_t )mechSpd10Hz * ( int32_t )pHandle->_Super.bElToMecRatio * 65536;
     pHandle->_Super.hElSpeedDpp = ( int16_t )elSpd;
-    return SPD_IsMecSpeedReliable( &pHandle->_Super, pMecSpeedUnit );
+
+	if ((tim4_ovc) > ENC_MAX_OVERFLOW_NB){
+		pHandle->TimerOverflowError = true;
+	}
+    
+	if (pHandle->TimerOverflowError)
+    {
+      bReliability = false;
+    }else{
+      bReliability = SPD_IsMecSpeedReliable(&pHandle->_Super, pMecSpeedUnit);
+    }
+
+	return bReliability;
 }
 
 
@@ -345,4 +337,10 @@ int16_t enc_sincos_get_raw_sin( EncSinCosConfigT* pHandle ){
 
 int16_t enc_sincos_get_raw_cos( EncSinCosConfigT* pHandle ){
     return pHandle->state.inj_adc_reading_cos;
+}
+
+void enc_sincos_set_mec_angle( EncSinCosConfigT* pHandle, int16_t hMecAngle ){
+    int16_t localhMecAngle = hMecAngle;
+    pHandle->_Super.hMecAngle = localhMecAngle;
+    pHandle->_Super.hElAngle = localhMecAngle * (int16_t)pHandle->_Super.bElToMecRatio;
 }
