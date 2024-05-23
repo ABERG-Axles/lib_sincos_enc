@@ -171,8 +171,6 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 	// signals vector outside of the valid area. Increase error count and discard measurement
 	if( module > SQ( SINCOS_MAX_AMPLITUDE ) ){
 		++ pcfg->state.signal_above_max_error_cnt;
-	}else if( module < SQ( SINCOS_MIN_AMPLITUDE ) ){
-		++ pcfg->state.signal_below_min_error_cnt;
 	}else{
 		float ang_rad = utils_fast_atan2( sin, cos );
 		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad );
@@ -186,6 +184,10 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 		int16_t hMecSpeedDpp = mech_angle_s16 - hMecAnglePrev;
     	pcfg->_Super.wMecAngle += ((int32_t)hMecSpeedDpp);
 	}
+}
+
+void enc_sincos_clear( EncSinCosConfigT *pHandle ){
+	enc_sincos_shutdown( pHandle );
 }
 
 #ifdef ENC_CALIBRATE
@@ -223,10 +225,13 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 #endif
 
 void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
-
-	pcfg->state.inj_adc_reading_sin = read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );
+	HAL_ADC_Start(&hadc4);
+	HAL_ADC_PollForConversion( &hadc4, 1);
+	pcfg->state.inj_adc_reading_sin = HAL_ADC_GetValue(&hadc4);/*read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );*/
     // g_inj_adc_reading_sin = pcfg->state.inj_adc_reading_sin;
-	pcfg->state.inj_adc_reading_cos = read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );
+	HAL_ADC_Start(&hadc4);
+	HAL_ADC_PollForConversion( &hadc4, 1);
+	pcfg->state.inj_adc_reading_cos = HAL_ADC_GetValue(&hadc4); /*read_inj_channel( pcfg->adcx2, pcfg->injected_channel_2 );*/
     // g_inj_adc_reading_cos = pcfg->state.inj_adc_reading_cos;
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( pcfg->state.inj_adc_reading_sin, pcfg->state.inj_adc_reading_cos );
@@ -237,11 +242,11 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 
 
 //
-void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
-   if( hadc == &hadc4 ){
-       enc_sincos_read_values( &sincos_enc_cfg );
-   }
-}
+// void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
+//    if( hadc == &hadc4 ){
+//        enc_sincos_read_values( &sincos_enc_cfg );
+//    }
+// }
 
  
 

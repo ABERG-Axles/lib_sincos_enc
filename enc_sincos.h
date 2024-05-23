@@ -65,4 +65,6 @@ void enc_sincos_set_mec_angle( EncSinCosConfigT* pHandle, int16_t hMecAngle );
 int16_t enc_sincos_get_raw_sin();
 int16_t enc_sincos_get_raw_cos();
 
+void enc_sincos_clear( EncSinCosConfigT *pHandle );
+
 #endif /* APPLICATION_USER_ENC_SINCOS_H_ */
