@@ -154,7 +154,7 @@ void enc_sincos_shutdown( EncSinCosConfigT* pcfg ){
 	memset( &pcfg->state, 0, sizeof( EncSinCosStateT ) );
 }
 
-void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
+bool enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 	uint32_t adc_value_sin = pcfg->state.inj_adc_reading_sin;
 	uint32_t adc_value_cos = pcfg->state.inj_adc_reading_cos;
 	float sin = ( ADC_VOLTS( adc_value_sin ) - pcfg->s_offset ) * pcfg->s_gain;
@@ -171,18 +171,20 @@ void enc_sincos_calc_deg( EncSinCosConfigT* pcfg ){
 	// signals vector outside of the valid area. Increase error count and discard measurement
 	if( module > SQ( SINCOS_MAX_AMPLITUDE ) ){
 		++ pcfg->state.signal_above_max_error_cnt;
+		return false;
 	}else{
 		float ang_rad = utils_fast_atan2( sin, cos );
 		pcfg->state.mech_angle_deg = RAD2DEG( ang_rad );
-		int16_t mech_angle_s16 = ( int16_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
-		int16_t el_angle_s16 = mech_angle_s16 * ( int16_t )pcfg->_Super.bElToMecRatio;
+		int32_t mech_angle_s32 = ( int32_t )( ang_rad * RAD2S16T_CONVERSION_FACTOR );
+		int32_t el_angle_s32 = mech_angle_s32 * ( int32_t )pcfg->_Super.bElToMecRatio;
         last_deg = ( int )pcfg->state.mech_angle_deg;
 
 		int16_t hMecAnglePrev = pcfg->_Super.hMecAngle;
-		pcfg->_Super.hMecAngle = mech_angle_s16;
-		pcfg->_Super.hElAngle = el_angle_s16;
-		int16_t hMecSpeedDpp = mech_angle_s16 - hMecAnglePrev;
+		pcfg->_Super.hMecAngle = (int16_t)mech_angle_s32;
+		pcfg->_Super.hElAngle = (int16_t)el_angle_s32;
+		int16_t hMecSpeedDpp = (int16_t)mech_angle_s32 - hMecAnglePrev;
     	pcfg->_Super.wMecAngle += ((int32_t)hMecSpeedDpp);
+		return true;
 	}
 }
 
@@ -224,7 +226,7 @@ void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, u
 }
 #endif
 
-void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
+bool enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 	HAL_ADC_Start(&hadc4);
 	HAL_ADC_PollForConversion( &hadc4, 1);
 	pcfg->state.inj_adc_reading_sin = HAL_ADC_GetValue(&hadc4);/*read_inj_channel( pcfg->adcx1, pcfg->injected_channel_1 );*/
@@ -236,7 +238,7 @@ void enc_sincos_read_values( EncSinCosConfigT* pcfg ){
 #ifdef ENC_CALIBRATE
     enc_sincos_calibrate( pcfg->state.inj_adc_reading_sin, pcfg->state.inj_adc_reading_cos );
 #else
-    enc_sincos_calc_deg( pcfg );
+    return enc_sincos_calc_deg( pcfg );
 #endif
 }
 

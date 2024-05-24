@@ -50,8 +50,8 @@ bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg );
 void enc_sincos_shutdown( EncSinCosConfigT* pcfg );
 void enc_sincos_calibrate( /*EncSinCosConfigT* pcfg,*/ uint32_t adc_value_sin, uint32_t adc_value_cos );
 
-void enc_sincos_read_values( EncSinCosConfigT* pcfg );
-void enc_sincos_calc_deg( EncSinCosConfigT* pcfg );
+bool enc_sincos_read_values( EncSinCosConfigT* pcfg );
+bool enc_sincos_calc_deg( EncSinCosConfigT* pcfg );
 
 float enc_sincos_get_angle_deg( EncSinCosConfigT* pcfg );
 
