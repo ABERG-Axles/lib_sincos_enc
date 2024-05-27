@@ -290,7 +290,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim){
         }
     }
 }
-#define ENC_MAX_OVERFLOW_NB     ((uint16_t)2)
+#define ENC_MAX_OVERFLOW_NB     ((uint16_t)256)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
     if( htim == &htim3 ){
         tim4_ovc ++;
@@ -316,6 +316,7 @@ bool enc_sincos_CalcAvrgMecSpeedUnit( EncSinCosConfigT *pHandle, int16_t *pMecSp
 
 	if ((tim4_ovc) > ENC_MAX_OVERFLOW_NB){
 		pHandle->TimerOverflowError = true;
+		pHandle->ovc = tim4_ovc;
 	}
     
 	if (pHandle->TimerOverflowError)

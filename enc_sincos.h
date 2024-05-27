@@ -44,6 +44,7 @@ typedef struct{
 	EncSinCosStateT	state;
 	bool 			TimerOverflowError;                           /*!< true if the number of overflow  occurred is greater than
                                                           'define' ENC_MAX_OVERFLOW_NB*/
+	uint32_t ovc;
 }EncSinCosConfigT;
 
 bool enc_sincos_get_defaults( EncSinCosConfigT* pcfg );
